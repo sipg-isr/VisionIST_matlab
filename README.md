@@ -1,7 +1,6 @@
 # MATLAB for VisionIST 
 
-A MATLAB client for the [VisionIST](https://github.com/sipg-isr/VisionIST_Library) fleet. All box knowledge lives here, in MATLAB;
-the Python side is one generic bridge that knows no box.
+A MATLAB client for the [VisionIST](https://github.com/sipg-isr/VisionIST_Library) fleet. All box knowledge lives here, in MATLAB; One script per box and a Python script runs one generic bridge that knows no box.
 
 ```
 visionist_run.py          the bridge: one Envelope in, one .mat out
