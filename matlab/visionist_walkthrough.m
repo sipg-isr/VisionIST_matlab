@@ -24,6 +24,8 @@
 % vsConfig holds the interpreter, the bridge path, the fleet addresses and the
 % session id. Everything else is derived from it.
 
+addpath(fileparts(mfilename('fullpath')));   % this folder, not octave/
+
 cfg = vsConfig();                      % add 'hostPrefix', "ifetch..." for a
                                        % remote fleet, or edit cfg.hosts below
 cfg.session_id = "matlab-walkthrough";

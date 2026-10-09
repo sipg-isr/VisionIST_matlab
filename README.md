@@ -3,7 +3,24 @@
 A MATLAB client for the [VisionIST](https://github.com/sipg-isr/VisionIST_Library) fleet. All box knowledge lives here, in MATLAB; One script per box and a Python script runs one generic bridge that knows no box.
 
 ```
-visionist_run.py          the bridge: one Envelope in, one .mat out
+visionist_run.py     the bridge: one Envelope in, one .mat out - the only
+                     interpreter-agnostic piece, shared by both clients
+README.md            this file
+
+matlab/              the MATLAB client   (MATLAB strings)
+octave/              the Octave client   (char and cellstr) - octave/README.md
+```
+
+Add one of the two to your path - never both, the function names are the same:
+
+```matlab
+addpath('matlab');    % or addpath('octave');
+cfg = vsConfig();
+```
+
+Inside either folder:
+
+```
 vsConfig.m                hosts, interpreter, workdir, session id
 vsRun.m                   the only function that launches Python
 vsProbe.m  vsReset.m      reachability; clear a box or one session
@@ -11,14 +28,19 @@ vsHost.m   vsSet.m        small helpers
 
 vsClip.m       vsD4rt.m       vsFeatures.m   vsLangSam.m
 vsLightglue.m  vsMoge.m       vsOpenClip.m   vsOpencv.m
-vsSbert.m      vsTapnext.m    vsUnimatch.m   vsVggt.m
-vsYolo.m                                     one per box
+vsPycv.m       vsSbert.m      vsTapnext.m    vsUnimatch.m
+vsVggt.m       vsYolo.m                      one per box
 
 vsTrackStream.m           stream frames through lightglue, collect matches
 vsObservation.m           match edges -> tracks -> observation matrix
 
 visionist_walkthrough.m   the five demos, section by section
 ```
+
+The Octave folder adds `vsChar.m` / `vsCellstr.m` (text normalisers),
+`vsContainsAny.m` / `vsSplitLines.m` (two builtins Octave lacks) and
+`vsSelfTest.m`, which checks the whole client against a stub bridge without a
+fleet.
 
 ## The split
 
@@ -69,23 +91,30 @@ MATLAB cannot use verbatim).
 
 Copy `vsSbert.m` — the shortest one — change the section name, the parameters
 and the documentation, and add the address to `cfg.hosts` in `vsConfig.m`.
-Nothing on the Python side changes.
+Nothing on the Python side changes. Do it in **both** `matlab/` and `octave/`:
+the two files differ only in how they spell text, so the second one is a short
+edit of the first, and `octave/vsSelfTest.m` will tell you if the payload
+drifted.
 
 ## Ports
 
-`vsConfig` builds `cfg.hosts` from one of two conventions, because two are in
-circulation and they do not agree:
+`vsConfig` builds `cfg.hosts` from the registry's one port map. Every box has
+a **permanent** host port, issued once in the order boxes arrived
+(VisionIST_Library's `registry/ports.json`): `clip` 9061 … `sfm` 9074, and the
+next new box takes 9075. Nothing already there ever moves, and a box answers
+on the same port whether you booted the whole fleet or three of it — a partial
+fleet has gaps, not renumbered boxes.
 
 ```matlab
-cfg = vsConfig();                       % "legacy": the hand-written
-                                        % fleet/docker-compose.yml order
-cfg = vsConfig('ports', "generated");   % VisionIST_Library's make_fleet.py,
-                                        % which assigns ports in NAME order
+cfg = vsConfig();                       % the permanent map
 ```
 
-`d4rt` sits at 9072 and `open_clip` at 9073 under `legacy` — appended, so no
-existing port moves. Under `generated` they land alphabetically (`d4rt`
-second, `open_clip` just before `opencv`) and shift everything after them. **The fleet you are running is the authority**: its
+This replaces the old `'ports'` option, which chose between a "legacy" and a
+"generated" convention that disagreed because the fleet generator used to
+renumber alphabetically. Passing `'ports', "generated"` still runs, warns, and
+gives you the same map.
+
+**The fleet you are running is still the authority**: its
 `docker-compose.yml` has the host ports and its `data/fleet.json` the
 service-name addresses. Override any single one afterwards:
 
@@ -112,6 +141,28 @@ metric — ratios and shapes mean something, absolute distances do not. Only
 `vsMoge` gives metric depth. And `vsD4rt` has a hard clip length (48 frames
 for the default checkpoint): ask about a later frame and upstream clamps the
 timestep rather than refusing, so you get a confident wrong answer.
+
+## Octave
+
+Octave has no `string` class, so [`matlab/`](matlab) does not run there:
+`"a" + ":" + "b"` becomes arithmetic on character codes and `["a" "b"]`
+becomes one 1x4 char, both silently rather than with an error. That is why
+there are two folders rather than one. [`octave/`](octave) holds the same
+client rewritten in char/cellstr, with the same function names, arguments and
+wire payloads.
+
+```matlab
+addpath('octave');          % that folder, not matlab/: the names collide
+cfg = vsConfig();
+vsSelfTest                  % 26 checks, no fleet needed
+```
+
+Differences are listed in [octave/README.md](octave/README.md); the short
+version is that lists of text are `{'a.jpg', 'b.jpg'}` rather than
+`["a.jpg" "b.jpg"]`, `vsProbe` and `vsOpenClip`'s model listing return struct
+arrays instead of tables, and reading frames from a video needs `ffmpeg` on
+PATH because Octave has no `VideoReader`. Those files also run under MATLAB,
+so a script written against them works on both.
 
 ## Requirements
 
