@@ -9,7 +9,7 @@ function [out, report] = vsPhone(cfg, varargin)
 %   whatever you like on the photos, and show the answer.
 %
 %   Name/value, by command (an argument for another command is an error)
-%     'command'        'get' (default) | 'setup' | 'show' | 'status' | 'reset'
+%     'command'        'get' (default) | 'latest' | 'setup' | 'show' | 'status' | 'reset'
 %     'session'        session id               (default: cfg.session_id)
 %                      'reset' without 'all' drops just this session
 %
@@ -21,7 +21,11 @@ function [out, report] = vsPhone(cfg, varargin)
 %     'camera'         'environment' (default, rear) | 'user' (front)
 %     'max_side'       the phone shrinks photos to this many px; 0 = original
 %     'jpeg_quality'   0.3 .. 1, default 0.9
-%     'sensors'        cellstr from {'location','orientation','motion'}
+%     'stream_fps'     frames per second of the page's Stream button, 0.2..30 (default 5)
+%     'stream_max_side' streamed frames are shrunk to this many px (default 640; 0 = original)
+%     'stream_quality' JPEG quality of streamed frames, 0.3 .. 1 (default 0.7)
+%     'sensors'        cellstr from {'location','orientation','motion','lidar'}
+%                      ('lidar' reports available=0 from a web page; see below)
 %     'note'           true (default) shows a note field
 %     'custom_labels'  true lets the phone user add labels
 %     'require_label'  true refuses a photo with no label
@@ -40,6 +44,11 @@ function [out, report] = vsPhone(cfg, varargin)
 %     'latest'         true -> only the newest
 %     'pop'            true -> delete what is returned
 %
+%     latest:   the newest streamed frame or photo, with labels, sensors, depth
+%     'after'          only if its n > after  (use reply.n); else reply.count == 0
+%     'wait_s'         block up to this long for a newer frame (long poll)
+%     'include_images' false -> metadata only, no image/depth bytes
+%
 %     show:
 %     'text'           text for the result card
 %     'image'          path of a JPEG/PNG/WebP result image
@@ -56,6 +65,9 @@ function [out, report] = vsPhone(cfg, varargin)
 %     images_files get: newline-separated paths of the photos, submissions in
 %                  order; meta(i).first_image / .n_images say which are whose
 %     images_count get: how many photo files
+%     (latest) meta is ONE struct (n, source, seq, age_s, labels, note, sensors,
+%                  size, depth); images_files is the frame's one file; depth_file the
+%                  raw depth map if there was one (little-endian, see meta.depth)
 %     qr_file      setup: path of the pairing QR code PNG
 %
 %   Things worth knowing
@@ -93,6 +105,9 @@ addParameter(p, 'burst_max', []);
 addParameter(p, 'camera', '');
 addParameter(p, 'max_side', []);
 addParameter(p, 'jpeg_quality', []);
+addParameter(p, 'stream_fps', []);
+addParameter(p, 'stream_max_side', []);
+addParameter(p, 'stream_quality', []);
 addParameter(p, 'sensors', {});
 addParameter(p, 'note', []);
 addParameter(p, 'custom_labels', []);
@@ -107,6 +122,7 @@ addParameter(p, 'max_mb', []);
 addParameter(p, 'wait_s', []);
 addParameter(p, 'latest', []);
 addParameter(p, 'pop', []);
+addParameter(p, 'include_images', []);
 addParameter(p, 'text', '');
 addParameter(p, 'image', '');
 addParameter(p, 'glb', '');
@@ -117,9 +133,9 @@ parse(p, varargin{:});
 a = p.Results;
 
 command = lower(vsChar(a.command));
-if ~any(strcmp(command, {'setup', 'get', 'show', 'status', 'reset'}))
+if ~any(strcmp(command, {'setup', 'get', 'latest', 'show', 'status', 'reset'}))
     error('visionist:phone', ...
-          'command must be setup, get, show, status or reset, got ''%s''', command);
+          'command must be setup, get, latest, show, status or reset, got ''%s''', command);
 end
 
 % Which arguments belong to which command: one that does not would be
@@ -127,14 +143,17 @@ end
 belongs = struct( ...
     'setup', {{'labels', 'mode', 'burst_max', 'camera', 'max_side', 'jpeg_quality', ...
                'sensors', 'note', 'custom_labels', 'require_label', 'public_url', ...
-               'rotate', 'qr', 'qr_scale', 'title'}}, ...
+               'rotate', 'qr', 'qr_scale', 'title', ...
+               'stream_fps', 'stream_max_side', 'stream_quality'}}, ...
     'get',   {{'after', 'max_items', 'max_mb', 'wait_s', 'latest', 'pop'}}, ...
+    'latest', {{'after', 'wait_s', 'include_images'}}, ...
     'show',  {{'title', 'text', 'image', 'glb', 'ref_seq', 'replace'}}, ...
     'status', {{}}, 'reset', {{}});
 allArgs = {'labels', 'mode', 'burst_max', 'camera', 'max_side', 'jpeg_quality', ...
            'sensors', 'note', 'custom_labels', 'require_label', 'public_url', ...
            'rotate', 'qr', 'qr_scale', 'title', 'after', 'max_items', 'max_mb', ...
-           'wait_s', 'latest', 'pop', 'text', 'image', 'glb', 'ref_seq', 'replace'};
+           'wait_s', 'latest', 'pop', 'text', 'image', 'glb', 'ref_seq', 'replace', ...
+           'stream_fps', 'stream_max_side', 'stream_quality', 'include_images'};
 for k = 1:numel(allArgs)
     key = allArgs{k};
     if ~isempty(a.(key)) && ~any(strcmp(key, belongs.(command)))
@@ -162,6 +181,9 @@ params = vsSet(params, 'burst_max',    a.burst_max);
 params = vsSet(params, 'camera',       lower(vsChar(a.camera)));
 params = vsSet(params, 'max_side',     a.max_side);
 params = vsSet(params, 'jpeg_quality', a.jpeg_quality);
+params = vsSet(params, 'stream_fps',   a.stream_fps);
+params = vsSet(params, 'stream_max_side', a.stream_max_side);
+params = vsSet(params, 'stream_quality', a.stream_quality);
 params = vsSet(params, 'sensors',      vsCellstr(a.sensors));
 params = vsSet(params, 'public_url',   vsChar(a.public_url));
 params = vsSet(params, 'qr_scale',     a.qr_scale);
@@ -174,7 +196,7 @@ params = vsSet(params, 'ref_seq',      a.ref_seq);
 % Logicals go through vsSet as logicals so jsonencode writes true/false; an
 % argument the caller never set must not reach the box at all, and
 % logical([]) is NOT empty to vsSet, so the guard is here.
-flags = {'note', 'custom_labels', 'require_label', 'rotate', 'qr', 'latest', 'pop', 'replace'};
+flags = {'note', 'custom_labels', 'require_label', 'rotate', 'qr', 'latest', 'pop', 'replace', 'include_images'};
 for k = 1:numel(flags)
     if ~isempty(a.(flags{k}))
         params = vsSet(params, flags{k}, logical(a.(flags{k})));
@@ -203,7 +225,8 @@ end
 if isfield(out, 'meta_json')
     try
         out.meta = jsondecode(out.meta_json);
-        if isstruct(out.meta); out.meta = num2cell(out.meta); end   % always a cell
+        % get: always a cell, one per submission; latest: ONE struct
+        if isstruct(out.meta) && ~strcmp(command, 'latest'); out.meta = num2cell(out.meta); end
     catch
     end
 end
