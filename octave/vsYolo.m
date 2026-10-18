@@ -10,7 +10,10 @@ function [out, report] = vsYolo(cfg, varargin)
 %   Name/value (unset ones are not sent, so the box's default applies):
 %     'images'          cellstr of image paths     (exclusive with video)
 %     'video'           one video file                  (exclusive with images)
-%     'command'         'detect' (default) | 'reset' | 'list'
+%     'command'         the task: 'detect' (default) | 'pose' | 'segment' |
+%                       'obb' | 'classify'; also 'reset' | 'list'
+%     'return_masks'    logical, segment only: full binary masks too
+%     'nms'             false selects YOLO26's NMS-free end-to-end head
 %     'session'         session id              (default: cfg.session_id)
 %     'conf'            confidence threshold           (box default 0.25)
 %     'iou'             NMS IoU threshold              (box default 0.70)
@@ -46,6 +49,8 @@ p.FunctionName = 'vsYolo';
 addParameter(p, 'images', {});
 addParameter(p, 'video', {});
 addParameter(p, 'command', 'detect');
+addParameter(p, 'return_masks', []);
+addParameter(p, 'nms', []);
 addParameter(p, 'session', '');
 addParameter(p, 'conf', []);
 addParameter(p, 'iou', []);
@@ -85,6 +90,8 @@ params = vsSet(params, 'frame_step',     a.frame_step);
 params = vsSet(params, 'max_frames',     a.max_frames);
 params = vsSet(params, 'weights',        vsChar(a.weights));
 params = vsSet(params, 'device',         vsChar(a.device));
+params = vsSet(params, 'return_masks',   a.return_masks);
+params = vsSet(params, 'nms',            a.nms);
 if ~isempty(a.classes)
     % Must be a JSON array even for one class, hence the cell.
     params.classes = num2cell(double(a.classes(:)'));
