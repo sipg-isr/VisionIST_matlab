@@ -29,7 +29,7 @@ vsHost.m   vsSet.m        small helpers
 vsClip.m       vsD4rt.m       vsFeatures.m   vsLangSam.m
 vsLightglue.m  vsMoge.m       vsOpenClip.m   vsOpencv.m
 vsPycv.m       vsSbert.m      vsTapnext.m    vsUnimatch.m
-vsVggt.m       vsYolo.m                      one per box
+vsVggt.m       vsYolo.m       vsInternvl.m   one per box
 
 vsTrackStream.m           stream frames through lightglue, collect matches
 vsObservation.m           match edges -> tracks -> observation matrix
@@ -100,8 +100,8 @@ drifted.
 
 `vsConfig` builds `cfg.hosts` from the registry's one port map. Every box has
 a **permanent** host port, issued once in the order boxes arrived
-(VisionIST_Library's `registry/ports.json`): `clip` 9061 … `sfm` 9074, and the
-next new box takes 9075. Nothing already there ever moves, and a box answers
+(VisionIST_Library's `registry/ports.json`): `clip` 9061 … `internvl` 9081, and
+the next new box takes 9082. Nothing already there ever moves, and a box answers
 on the same port whether you booted the whole fleet or three of it — a partial
 fleet has gaps, not renumbered boxes.
 
