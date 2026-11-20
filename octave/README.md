@@ -92,6 +92,7 @@ vsSelfTest.m                 26 checks against a stub bridge - run after any cha
 vsConfig.m  vsRun.m  vsHost.m  vsSet.m  vsProbe.m  vsReset.m      the core
 vsClip  vsD4rt  vsFeatures  vsLangSam  vsLightglue  vsMoge        one per box
 vsOpenClip  vsOpencv  vsPycv  vsSbert  vsTapnext  vsUnimatch  vsVggt  vsYolo
+vsInternvl
 vsTrackStream.m  vsObservation.m   stream -> tracks -> observation matrix
 visionist_walkthrough.m      the five demos, as a plain script
 ```
